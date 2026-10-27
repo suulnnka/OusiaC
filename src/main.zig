@@ -10,6 +10,8 @@
 //! 默认(无 -S/-c/-E):编译 + 汇编 + 链接,一步得到 ZOS 可执行文件。
 
 const std = @import("std");
+const zas = @import("asm.zig");
+const zld = @import("link.zig");
 const tk = @import("token.zig");
 const ty = @import("type.zig");
 const parse = @import("parse.zig");
@@ -28,13 +30,14 @@ const builtin_headers_src = [_]struct { name: []const u8, src: []const u8 }{
 const Options = struct {
     input: []const u8 = "",
     output: []const u8 = "",
-    mode: enum { auto, asm_only, obj_only, preprocess } = .auto,
+    mode: enum { auto, asm_only, obj_only, preprocess, assemble } = .auto,
     include_dirs: std.ArrayList([]const u8) = .empty,
     defines: std.ArrayList([]const u8) = .empty,
     os_root: []const u8 = "../os",
     os_root_explicit: bool = false,
     verbose: bool = false,
     keep_asm: bool = false,
+    use_zig_cc: bool = false,
 };
 
 const usage =
@@ -44,12 +47,14 @@ const usage =
     \\
     \\  -o <file>       输出文件(默认 a.out / input.s / input.o)
     \\  -S              只生成汇编(.s)
+    \\  --zas           汇编模式:输入 .s,输出 .o(自研汇编器)
     \\  -c              只汇编到目标文件(.o)
     \\  -E              只预处理,输出到 stdout
     \\  -I <dir>        头文件搜索路径(可多次)
     \\  -D <n>[=v]      预定义宏(可多次)
     \\  --os-root DIR   ZOS 仓库位置(默认 ../os,需先 zig build 出 libzos.a)
     \\  --keep-s        链接后保留 .s 汇编文件
+    \\  --use-zig-cc    回退:汇编/链接改用 zig cc(默认用自研 zas + zld)
     \\  -v              打印底层命令
     \\  -h, --help      本帮助
     \\
@@ -79,6 +84,20 @@ pub fn main(init: std.process.Init) !void {
     // 环境变量仅在未显式指定 --os-root 时生效
     if (!opts.os_root_explicit) {
         if (init.environ_map.get("ZCC_OS_ROOT")) |root| opts.os_root = root;
+    }
+
+    // ---- 汇编模式:.s → .o(自研汇编器)----
+    if (opts.mode == .assemble) {
+        const src_text = std.Io.Dir.cwd().readFileAlloc(io, opts.input, arena, .limited(64 << 20)) catch |e| {
+            fatal("cannot read '{s}': {s}", .{ opts.input, @errorName(e) });
+        };
+        const obj = zas.Assembler.assemble(arena, src_text, opts.input) catch {
+            std.process.exit(1);
+        };
+        const out = if (opts.output.len > 0) opts.output else (replaceExt(arena, opts.input, ".o") orelse fatal("bad input name", .{}));
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = out, .data = obj });
+        if (opts.verbose) std.debug.print("zcc: assembled {s} -> {s} ({d} bytes)\n", .{ opts.input, out, obj.len });
+        return;
     }
 
     // ---- 读入源文件 ----
@@ -178,10 +197,17 @@ pub fn main(init: std.process.Init) !void {
 
     if (opts.mode == .obj_only) {
         const obj_out = if (opts.output.len > 0) opts.output else (replaceExt(arena, opts.input, ".o") orelse fatal("bad input name", .{}));
-        const cc_argv = [_][]const u8{
-            "zig", "cc", "-target", "x86_64-freestanding", "-c", "-o", obj_out, s_path,
-        };
-        try runChild(gpa, io, &cc_argv, opts.verbose);
+        if (!opts.use_zig_cc) {
+            const obj_data = zas.Assembler.assemble(arena, asm_text, s_path) catch {
+                std.process.exit(1);
+            };
+            try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = obj_out, .data = obj_data });
+        } else {
+            const cc_argv = [_][]const u8{
+                "zig", "cc", "-target", "x86_64-freestanding", "-c", "-o", obj_out, s_path,
+            };
+            try runChild(gpa, io, &cc_argv, opts.verbose);
+        }
         if (!opts.keep_asm) deleteFile(io, s_path);
         return;
     }
@@ -191,6 +217,35 @@ pub fn main(init: std.process.Init) !void {
         break :blk default_out.items;
     };
 
+    // ---- 自研汇编 + 链接(默认路径)----
+    if (!opts.use_zig_cc) {
+        const obj_data = zas.Assembler.assemble(arena, asm_text, s_path) catch {
+            std.process.exit(1);
+        };
+        if (opts.mode == .obj_only) {
+            // 不会到这里(-c 在前面已处理并 return)——保险
+            try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = out_path, .data = obj_data });
+            return;
+        }
+        const lib_data = std.Io.Dir.cwd().readFileAlloc(io, libzos, arena, .limited(64 << 20)) catch {
+            fatal("cannot read {s}", .{libzos});
+        };
+        zld.Linker.link(
+            arena,
+            &.{.{ .path = s_path, .data = obj_data }},
+            &.{.{ .path = libzos, .data = lib_data }},
+            "_start",
+            out_path,
+            io,
+        ) catch {
+            std.process.exit(1);
+        };
+        if (!opts.keep_asm) deleteFile(io, s_path);
+        if (opts.verbose) std.debug.print("zcc: {s} -> {s} (zas + zld)\n", .{ opts.input, out_path });
+        return;
+    }
+
+    // ---- zig cc 回退路径 ----
     const cc_argv = [_][]const u8{
         "zig",                    "cc",
         "-target",                "x86_64-freestanding",
@@ -216,6 +271,8 @@ fn parseCli(arena: std.mem.Allocator, args: []const []const u8, opts: *Options) 
             opts.output = args[i];
         } else if (std.mem.eql(u8, a, "-S")) {
             opts.mode = .asm_only;
+        } else if (std.mem.eql(u8, a, "--zas")) {
+            opts.mode = .assemble;
         } else if (std.mem.eql(u8, a, "-c")) {
             opts.mode = .obj_only;
         } else if (std.mem.eql(u8, a, "-E")) {
@@ -224,6 +281,8 @@ fn parseCli(arena: std.mem.Allocator, args: []const []const u8, opts: *Options) 
             opts.verbose = true;
         } else if (std.mem.eql(u8, a, "--keep-s")) {
             opts.keep_asm = true;
+        } else if (std.mem.eql(u8, a, "--use-zig-cc")) {
+            opts.use_zig_cc = true;
         } else if (std.mem.eql(u8, a, "-h") or std.mem.eql(u8, a, "--help")) {
             std.debug.print("{s}", .{usage});
             std.process.exit(0);

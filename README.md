@@ -1,21 +1,21 @@
 # zcc —— 用 Zig 写的 C 编译器(目标:../os 的 ZOS)
 
-`zcc` 是一个约 4600 行 Zig 的教学级 C 编译器:读入 C 源码,生成 x86-64 汇编,
-再借助 `zig cc` 汇编、链接到 ZOS 的 `libzos.a`(crt0 + libc),产出可以直接放进
+`zcc` 是一个约 6400 行 Zig 的**自包含教学级 C 工具链**:编译器(词法→预处理→
+解析→x86-64 代码生成)+ **汇编器 `zas`** + **链接器 `zld`**,产出可以直接放进
 `../os` 的 initrd、在 QEMU 里运行的用户程序(静态 ELF,基址 0x400000)。
+运行时链接 ZOS 自己的 `libzos.a`(crt0 + libc);`zig cc` 仅作为可选回退
+(`--use-zig-cc`)。
 
 ```
-foo.c ──词法──> token ──预处理──> token ──解析──> AST ──代码生成──> foo.s
-                                                                  │
-        ┌─────────────────────────────────────────────────────────┘
+foo.c ──词法→ token ──预处理→ token ──解析→ AST ──代码生成→ foo.s
+                                                       │
+        ┌──────────────────────────────────────────────┘
         ▼
-   zig cc -target x86_64-freestanding -nostdlib -Wl,--script=../os/userland/user.ld
-          foo.s ../os/zig-out/lib/libzos.a  ──>  foo(ZOS 可执行文件)
+   zas(自研汇编器):foo.s → foo.o(ELF64 REL + 重定位)
+        ▼
+   zld(自研链接器):foo.o + libzos.a(GNU ar,lazy 抽取)
+        → foo(静态 ET_EXEC @0x400000,入口 _start,两个 PT_LOAD)
 ```
-
-**为什么不自己写 ELF/链接器?** "转成可执行文件"最省事的路是复用现成工具链:
-`zig cc` 当汇编器 + 链接器,ZOS 仓库里的 `libzos.a` 当运行时(`_start`、printf、
-malloc 全都在),`user.ld` 决定加载基址。编译器本体只需要把 C 正确翻译成汇编。
 
 ### 链接的是谁的 libc?
 
@@ -87,7 +87,9 @@ zcc [选项] input.c
 | `src/parse.zig` | 声明/声明符(分组小舞蹈)/语句/表达式/初始化器/常量求值 | 2431 |
 | `src/gen.zig` | x86-64 SysV 代码生成(栈机式:结果恒在 %rax) | 564 |
 | `src/pp.zig` | 预处理器(宏、条件编译、include) | 754 |
-| `src/main.zig` | 驱动:CLI → 流水线 → 调 zig cc 链接 | 292 |
+| `src/asm.zig` | **汇编器 zas**:AT&T 子集 → ELF64 REL(.o),含重定位 | ~700 |
+| `src/link.zig` | **链接器 zld**:.o + libzos.a → 静态 ET_EXEC | ~700 |
+| `src/main.zig` | 驱动:CLI → 流水线 → zas → zld(zig cc 仅回退) | ~330 |
 
 几个值得一提的实现点:
 
@@ -99,6 +101,28 @@ zcc [选项] input.c
   可变参数调用前 `mov $0, %eax`(无向量寄存器)。
 - **int 语义**:所有算术在 int(32 位)或 long(64 位)档进行,加载/存储按
   实际宽度符号或零扩展;全局初始化器支持"符号 ± 常量"的地址重定位。
+
+### 汇编器 zas(src/asm.zig)
+
+只编码 zcc 生成器输出的指令子集(约 60 种操作数模式),因此可以做到很小:
+寄存器/内存操作数解析(REX 自动生成、r8-r15、disp8/disp32、`sym(%rip)`)、
+跳转一律 rel32 并在节末 patch 局部标签、其余符号引用发
+R_X86_64_{PC32,PLT32,64} 重定位;输出带 .symtab/.rela 的标准 ELF64 REL,
+可用 `objdump -d` 直接检查。
+
+### 链接器 zld(src/link.zig)
+
+- **输入**:若干 .o + GNU ar 归档(解析 `/` 符号索引与 `//` 长名表,按需
+  lazy 抽取成员,索引损坏则退化为全量索引)。
+- **符号**:强/弱/COMMON 解析,STT_SECTION 局部符号,重复强定义报错;
+  入口符号 `_start` 强制从归档拉入。
+- **布局**:复刻 `user.ld` 的节序(.text → .rodata → .data → .bss,基址
+  0x400000),丢弃 .eh_frame/调试节;**每个输出区起始按区内最大对齐数对齐**
+  (lib 的 memset 用 movaps,常量池需要 16 字节对齐——这是实际踩过的坑)。
+- **重定位**:R_X86_64_{64, PC32, PLT32, 32, 32S},全部带溢出检查。
+- **输出**:ET_EXEC、入口 _start、两个 PT_LOAD(RX 含头+text+rodata,
+  RW 含 data+bss,bss 用 memsz>filesz),p_offset ≡ p_vaddr (mod 0x1000),
+  与 ZOS 内核加载器(kernel/elf.zig)的约定完全匹配。
 
 ## 测试
 
