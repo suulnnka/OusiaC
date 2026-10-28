@@ -1,6 +1,6 @@
 //! 链接器:ELF64 REL 目标文件(.o)+ 静态归档(.a)→ 静态 ET_EXEC ELF
 //!
-//! 为 ZOS 而生:基址 0x400000、入口 _start、节序 .text→.rodata→.data→.bss
+//! 为 OusiaOS 而生:基址 0x400000、入口 _start、节序 .text→.rodata→.data→.bss
 //! (等价 ../os/userland/user.ld 的布局),丢弃 .eh_frame/.note*/调试节。
 //!
 //! 支持:GNU ar 归档(长名 + 符号索引,lazy 抽取)、强/弱/COMMON 符号、

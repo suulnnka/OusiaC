@@ -1,13 +1,13 @@
 //! OusiaC —— 一个教学用的 C 编译器(Zig 编写)
 //!
 //! 流水线:C 源码 → 词法 → 预处理 → 解析(AST) → x86-64 汇编,
-//! 再用 `zig cc` 汇编并链接到 ZOS 的 libzos.a(crt0 + libc),
+//! 再用 `zig cc` 汇编并链接到 OusiaOS 的 libousia.a(crt0 + libc),
 //! 产出可在 ../os 中运行的用户程序(静态 ELF,基址 0x400000)。
 //!
 //! 用法:
 //!   OusiaC [-S|-c|-E] [-o out] [-I dir]... [-D name[=val]]... [--os-root DIR] input.c
 //!
-//! 默认(无 -S/-c/-E):编译 + 汇编 + 链接,一步得到 ZOS 可执行文件。
+//! 默认(无 -S/-c/-E):编译 + 汇编 + 链接,一步得到 OusiaOS 可执行文件。
 
 const std = @import("std");
 const oas = @import("asm.zig");
@@ -41,7 +41,7 @@ const Options = struct {
 };
 
 const usage =
-    \\OusiaC - 一个简单的 C 编译器(Zig 编写,目标:ZOS x86-64 用户程序)
+    \\OusiaC - 一个简单的 C 编译器(Zig 编写,目标:OusiaOS x86-64 用户程序)
     \\
     \\用法: OusiaC [选项] input.c
     \\
@@ -52,7 +52,7 @@ const usage =
     \\  -E              只预处理,输出到 stdout
     \\  -I <dir>        头文件搜索路径(可多次)
     \\  -D <n>[=v]      预定义宏(可多次)
-    \\  --os-root DIR   ZOS 仓库位置(默认 ../os,需先 zig build 出 libzos.a)
+    \\  --os-root DIR   OusiaOS 仓库位置(默认 ../os,需先 zig build 出 libousia.a)
     \\  --keep-s        链接后保留 .s 汇编文件
     \\  --use-zig-cc    回退:汇编/链接改用 zig cc(默认用自研 oas + old)
     \\  -v              打印底层命令
@@ -108,7 +108,7 @@ pub fn main(init: std.process.Init) !void {
     const file = arena.create(tk.SourceFile) catch unreachable;
     file.* = .{ .path = opts.input, .content = content };
 
-    // ---- include 搜索路径:-I 目录 + ZOS 的 userland/include ----
+    // ---- include 搜索路径:-I 目录 + OusiaOS 的 userland/include ----
     var dirs: std.ArrayList([]const u8) = .empty;
     try dirs.appendSlice(arena, opts.include_dirs.items);
     const os_include = try std.fmt.allocPrint(arena, "{s}/userland/include", .{opts.os_root});
@@ -186,13 +186,13 @@ pub fn main(init: std.process.Init) !void {
     if (opts.verbose) std.debug.print("OusiaC: wrote {s}\n", .{s_path});
     if (opts.mode == .asm_only) return;
 
-    // ---- 汇编 + 链接(zig cc + ZOS 的 libzos.a)----
-    const libzos = try std.fmt.allocPrint(arena, "{s}/zig-out/lib/libzos.a", .{opts.os_root});
+    // ---- 汇编 + 链接(zig cc + OusiaOS 的 libousia.a)----
+    const libousia = try std.fmt.allocPrint(arena, "{s}/zig-out/lib/libousia.a", .{opts.os_root});
     const user_ld = try std.fmt.allocPrint(arena, "{s}/userland/user.ld", .{opts.os_root});
 
-    // libzos.a 存在性检查
-    _ = std.Io.Dir.cwd().statFile(io, libzos, .{}) catch {
-        fatal("找不到 {s}\n  请先在 ZOS 仓库目录执行: zig build\n  (或用 --os-root 指定 ZOS 位置)", .{libzos});
+    // libousia.a 存在性检查
+    _ = std.Io.Dir.cwd().statFile(io, libousia, .{}) catch {
+        fatal("找不到 {s}\n  请先在 OusiaOS 仓库目录执行: zig build\n  (或用 --os-root 指定 OusiaOS 位置)", .{libousia});
     };
 
     if (opts.mode == .obj_only) {
@@ -227,13 +227,13 @@ pub fn main(init: std.process.Init) !void {
             try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = out_path, .data = obj_data });
             return;
         }
-        const lib_data = std.Io.Dir.cwd().readFileAlloc(io, libzos, arena, .limited(64 << 20)) catch {
-            fatal("cannot read {s}", .{libzos});
+        const lib_data = std.Io.Dir.cwd().readFileAlloc(io, libousia, arena, .limited(64 << 20)) catch {
+            fatal("cannot read {s}", .{libousia});
         };
         old.Linker.link(
             arena,
             &.{.{ .path = s_path, .data = obj_data }},
-            &.{.{ .path = libzos, .data = lib_data }},
+            &.{.{ .path = libousia, .data = lib_data }},
             "_start",
             out_path,
             io,
@@ -254,7 +254,7 @@ pub fn main(init: std.process.Init) !void {
         try std.fmt.allocPrint(arena, "-Wl,--script={s}", .{user_ld}),
         "-Wl,-e,_start",          "-Wl,--build-id=none",
         "-o",                     out_path,
-        s_path,                   libzos,
+        s_path,                   libousia,
     };
     try runChild(gpa, io, &cc_argv, opts.verbose);
     if (!opts.keep_asm) deleteFile(io, s_path);
