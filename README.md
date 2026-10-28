@@ -33,9 +33,9 @@ foo.c ──词法→ token ──预处理→ token ──解析→ AST ──�
 
 ```bash
 cd ../os && zig build        # 1) 先构建 OusiaOS(产出 libousia.a)
-cd ../ccompiler && zig build # 2) 构建 OusiaC
+cd ../ccompiler && zig build # 2) 构建 occ
 
-./zig-out/bin/OusiaC examples/hello.c -o ohello   # 3) 编译一个 C 程序
+./zig-out/bin/occ examples/hello.c -o ohello   # 3) 编译一个 C 程序
 ./scripts/e2e.sh                               # 4) 端到端:打 ISO + QEMU 全量验证
 ```
 
@@ -45,7 +45,7 @@ e2e 会把 OusiaC 编译的程序装进 OusiaOS 的 `/bin`,启动 QEMU 逐个运
 ## 用法
 
 ```
-OusiaC [选项] input.c
+occ [选项] input.c
   -o <file>       输出(默认 a.out)
   -S / -c / -E    只到汇编 / 目标文件 / 预处理
   -I <dir>        头文件搜索路径(自动追加 <os-root>/userland/include)
@@ -70,7 +70,7 @@ OusiaC [选项] input.c
   #if/#ifdef/#elif/#else/#endif(#if 走真正的常量求值器)、
   #undef/#error/#pragma(忽略)、__FILE__/__LINE__/__COUNTER__ 等。
 - **内建头文件**:stddef.h/stdarg.h/stdbool.h/stdint.h/limits.h 直接嵌在
-  OusiaC 二进制里(@embedFile),其余(<stdio.h> 等)用 OusiaOS 的 userland/include。
+  occ 二进制里(@embedFile),其余(<stdio.h> 等)用 OusiaOS 的 userland/include。
 
 ### 已知边界(教学取舍)
 
@@ -104,7 +104,7 @@ OusiaC [选项] input.c
 
 ### 汇编器 oas(src/asm.zig)
 
-只编码 OusiaC 生成器输出的指令子集(约 60 种操作数模式),因此可以做到很小:
+只编码 occ 生成器输出的指令子集(约 60 种操作数模式),因此可以做到很小:
 寄存器/内存操作数解析(REX 自动生成、r8-r15、disp8/disp32、`sym(%rip)`)、
 跳转一律 rel32 并在节末 patch 局部标签、其余符号引用发
 R_X86_64_{PC32,PLT32,64} 重定位;输出带 .symtab/.rela 的标准 ELF64 REL,

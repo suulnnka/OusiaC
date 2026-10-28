@@ -1,11 +1,11 @@
-//! OusiaC —— 一个教学用的 C 编译器(Zig 编写)
+//! occ —— OusiaC 编译器(Zig 编写)
 //!
 //! 流水线:C 源码 → 词法 → 预处理 → 解析(AST) → x86-64 汇编,
 //! 再用 `zig cc` 汇编并链接到 OusiaOS 的 libousia.a(crt0 + libc),
 //! 产出可在 ../os 中运行的用户程序(静态 ELF,基址 0x400000)。
 //!
 //! 用法:
-//!   OusiaC [-S|-c|-E] [-o out] [-I dir]... [-D name[=val]]... [--os-root DIR] input.c
+//!   occ [-S|-c|-E] [-o out] [-I dir]... [-D name[=val]]... [--os-root DIR] input.c
 //!
 //! 默认(无 -S/-c/-E):编译 + 汇编 + 链接,一步得到 OusiaOS 可执行文件。
 
@@ -41,9 +41,9 @@ const Options = struct {
 };
 
 const usage =
-    \\OusiaC - 一个简单的 C 编译器(Zig 编写,目标:OusiaOS x86-64 用户程序)
+    \\occ - OusiaC 编译器(Zig 编写,目标:OusiaOS x86-64 用户程序)
     \\
-    \\用法: OusiaC [选项] input.c
+    \\用法: occ [选项] input.c
     \\
     \\  -o <file>       输出文件(默认 a.out / input.s / input.o)
     \\  -S              只生成汇编(.s)
@@ -61,7 +61,7 @@ const usage =
 ;
 
 fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
-    std.debug.print("OusiaC: error: " ++ fmt ++ "\n", args);
+    std.debug.print("occ: error: " ++ fmt ++ "\n", args);
     std.process.exit(1);
 }
 
@@ -96,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
         };
         const out = if (opts.output.len > 0) opts.output else (replaceExt(arena, opts.input, ".o") orelse fatal("bad input name", .{}));
         try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = out, .data = obj });
-        if (opts.verbose) std.debug.print("OusiaC: assembled {s} -> {s} ({d} bytes)\n", .{ opts.input, out, obj.len });
+        if (opts.verbose) std.debug.print("occ: assembled {s} -> {s} ({d} bytes)\n", .{ opts.input, out, obj.len });
         return;
     }
 
@@ -183,7 +183,7 @@ pub fn main(init: std.process.Init) !void {
         },
     }
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = s_path, .data = asm_text });
-    if (opts.verbose) std.debug.print("OusiaC: wrote {s}\n", .{s_path});
+    if (opts.verbose) std.debug.print("occ: wrote {s}\n", .{s_path});
     if (opts.mode == .asm_only) return;
 
     // ---- 汇编 + 链接(zig cc + OusiaOS 的 libousia.a)----
@@ -241,7 +241,7 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(1);
         };
         if (!opts.keep_asm) deleteFile(io, s_path);
-        if (opts.verbose) std.debug.print("OusiaC: {s} -> {s} (oas + old)\n", .{ opts.input, out_path });
+        if (opts.verbose) std.debug.print("occ: {s} -> {s} (oas + old)\n", .{ opts.input, out_path });
         return;
     }
 
@@ -258,7 +258,7 @@ pub fn main(init: std.process.Init) !void {
     };
     try runChild(gpa, io, &cc_argv, opts.verbose);
     if (!opts.keep_asm) deleteFile(io, s_path);
-    if (opts.verbose) std.debug.print("OusiaC: {s} -> {s}\n", .{ opts.input, out_path });
+    if (opts.verbose) std.debug.print("occ: {s} -> {s}\n", .{ opts.input, out_path });
 }
 
 fn parseCli(arena: std.mem.Allocator, args: []const []const u8, opts: *Options) !void {
@@ -326,7 +326,7 @@ fn replaceExt(arena: std.mem.Allocator, path: []const u8, new_ext: []const u8) ?
 
 fn runChild(gpa: std.mem.Allocator, io: std.Io, argv: []const []const u8, verbose: bool) !void {
     if (verbose) {
-        std.debug.print("OusiaC: run:", .{});
+        std.debug.print("occ: run:", .{});
         for (argv) |a| std.debug.print(" {s}", .{a});
         std.debug.print("\n", .{});
     }

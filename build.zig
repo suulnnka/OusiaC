@@ -1,4 +1,4 @@
-//! OusiaC 构建脚本(宿主可执行文件)
+//! occ 构建脚本(宿主可执行文件)
 
 const std = @import("std");
 
@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .ReleaseSafe });
 
     const exe = b.addExecutable(.{
-        .name = "OusiaC",
+        .name = "occ",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -18,6 +18,6 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 
     const run_cmd = b.addRunArtifact(exe);
-    const run_step = b.step("run", "Run OusiaC");
+    const run_step = b.step("run", "Run occ");
     run_step.dependOn(&run_cmd.step);
 }
