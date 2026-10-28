@@ -1,17 +1,17 @@
-//! zcc —— 一个教学用的 C 编译器(Zig 编写)
+//! OusiaC —— 一个教学用的 C 编译器(Zig 编写)
 //!
 //! 流水线:C 源码 → 词法 → 预处理 → 解析(AST) → x86-64 汇编,
 //! 再用 `zig cc` 汇编并链接到 ZOS 的 libzos.a(crt0 + libc),
 //! 产出可在 ../os 中运行的用户程序(静态 ELF,基址 0x400000)。
 //!
 //! 用法:
-//!   zcc [-S|-c|-E] [-o out] [-I dir]... [-D name[=val]]... [--os-root DIR] input.c
+//!   OusiaC [-S|-c|-E] [-o out] [-I dir]... [-D name[=val]]... [--os-root DIR] input.c
 //!
 //! 默认(无 -S/-c/-E):编译 + 汇编 + 链接,一步得到 ZOS 可执行文件。
 
 const std = @import("std");
-const zas = @import("asm.zig");
-const zld = @import("link.zig");
+const oas = @import("asm.zig");
+const old = @import("link.zig");
 const tk = @import("token.zig");
 const ty = @import("type.zig");
 const parse = @import("parse.zig");
@@ -41,27 +41,27 @@ const Options = struct {
 };
 
 const usage =
-    \\zcc - 一个简单的 C 编译器(Zig 编写,目标:ZOS x86-64 用户程序)
+    \\OusiaC - 一个简单的 C 编译器(Zig 编写,目标:ZOS x86-64 用户程序)
     \\
-    \\用法: zcc [选项] input.c
+    \\用法: OusiaC [选项] input.c
     \\
     \\  -o <file>       输出文件(默认 a.out / input.s / input.o)
     \\  -S              只生成汇编(.s)
-    \\  --zas           汇编模式:输入 .s,输出 .o(自研汇编器)
+    \\  --oas           汇编模式:输入 .s,输出 .o(自研汇编器)
     \\  -c              只汇编到目标文件(.o)
     \\  -E              只预处理,输出到 stdout
     \\  -I <dir>        头文件搜索路径(可多次)
     \\  -D <n>[=v]      预定义宏(可多次)
     \\  --os-root DIR   ZOS 仓库位置(默认 ../os,需先 zig build 出 libzos.a)
     \\  --keep-s        链接后保留 .s 汇编文件
-    \\  --use-zig-cc    回退:汇编/链接改用 zig cc(默认用自研 zas + zld)
+    \\  --use-zig-cc    回退:汇编/链接改用 zig cc(默认用自研 oas + old)
     \\  -v              打印底层命令
     \\  -h, --help      本帮助
     \\
 ;
 
 fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
-    std.debug.print("zcc: error: " ++ fmt ++ "\n", args);
+    std.debug.print("OusiaC: error: " ++ fmt ++ "\n", args);
     std.process.exit(1);
 }
 
@@ -83,7 +83,7 @@ pub fn main(init: std.process.Init) !void {
     }
     // 环境变量仅在未显式指定 --os-root 时生效
     if (!opts.os_root_explicit) {
-        if (init.environ_map.get("ZCC_OS_ROOT")) |root| opts.os_root = root;
+        if (init.environ_map.get("OUSIAC_OS_ROOT")) |root| opts.os_root = root;
     }
 
     // ---- 汇编模式:.s → .o(自研汇编器)----
@@ -91,12 +91,12 @@ pub fn main(init: std.process.Init) !void {
         const src_text = std.Io.Dir.cwd().readFileAlloc(io, opts.input, arena, .limited(64 << 20)) catch |e| {
             fatal("cannot read '{s}': {s}", .{ opts.input, @errorName(e) });
         };
-        const obj = zas.Assembler.assemble(arena, src_text, opts.input) catch {
+        const obj = oas.Assembler.assemble(arena, src_text, opts.input) catch {
             std.process.exit(1);
         };
         const out = if (opts.output.len > 0) opts.output else (replaceExt(arena, opts.input, ".o") orelse fatal("bad input name", .{}));
         try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = out, .data = obj });
-        if (opts.verbose) std.debug.print("zcc: assembled {s} -> {s} ({d} bytes)\n", .{ opts.input, out, obj.len });
+        if (opts.verbose) std.debug.print("OusiaC: assembled {s} -> {s} ({d} bytes)\n", .{ opts.input, out, obj.len });
         return;
     }
 
@@ -183,7 +183,7 @@ pub fn main(init: std.process.Init) !void {
         },
     }
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = s_path, .data = asm_text });
-    if (opts.verbose) std.debug.print("zcc: wrote {s}\n", .{s_path});
+    if (opts.verbose) std.debug.print("OusiaC: wrote {s}\n", .{s_path});
     if (opts.mode == .asm_only) return;
 
     // ---- 汇编 + 链接(zig cc + ZOS 的 libzos.a)----
@@ -198,7 +198,7 @@ pub fn main(init: std.process.Init) !void {
     if (opts.mode == .obj_only) {
         const obj_out = if (opts.output.len > 0) opts.output else (replaceExt(arena, opts.input, ".o") orelse fatal("bad input name", .{}));
         if (!opts.use_zig_cc) {
-            const obj_data = zas.Assembler.assemble(arena, asm_text, s_path) catch {
+            const obj_data = oas.Assembler.assemble(arena, asm_text, s_path) catch {
                 std.process.exit(1);
             };
             try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = obj_out, .data = obj_data });
@@ -219,7 +219,7 @@ pub fn main(init: std.process.Init) !void {
 
     // ---- 自研汇编 + 链接(默认路径)----
     if (!opts.use_zig_cc) {
-        const obj_data = zas.Assembler.assemble(arena, asm_text, s_path) catch {
+        const obj_data = oas.Assembler.assemble(arena, asm_text, s_path) catch {
             std.process.exit(1);
         };
         if (opts.mode == .obj_only) {
@@ -230,7 +230,7 @@ pub fn main(init: std.process.Init) !void {
         const lib_data = std.Io.Dir.cwd().readFileAlloc(io, libzos, arena, .limited(64 << 20)) catch {
             fatal("cannot read {s}", .{libzos});
         };
-        zld.Linker.link(
+        old.Linker.link(
             arena,
             &.{.{ .path = s_path, .data = obj_data }},
             &.{.{ .path = libzos, .data = lib_data }},
@@ -241,7 +241,7 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(1);
         };
         if (!opts.keep_asm) deleteFile(io, s_path);
-        if (opts.verbose) std.debug.print("zcc: {s} -> {s} (zas + zld)\n", .{ opts.input, out_path });
+        if (opts.verbose) std.debug.print("OusiaC: {s} -> {s} (oas + old)\n", .{ opts.input, out_path });
         return;
     }
 
@@ -258,7 +258,7 @@ pub fn main(init: std.process.Init) !void {
     };
     try runChild(gpa, io, &cc_argv, opts.verbose);
     if (!opts.keep_asm) deleteFile(io, s_path);
-    if (opts.verbose) std.debug.print("zcc: {s} -> {s}\n", .{ opts.input, out_path });
+    if (opts.verbose) std.debug.print("OusiaC: {s} -> {s}\n", .{ opts.input, out_path });
 }
 
 fn parseCli(arena: std.mem.Allocator, args: []const []const u8, opts: *Options) !void {
@@ -271,7 +271,7 @@ fn parseCli(arena: std.mem.Allocator, args: []const []const u8, opts: *Options) 
             opts.output = args[i];
         } else if (std.mem.eql(u8, a, "-S")) {
             opts.mode = .asm_only;
-        } else if (std.mem.eql(u8, a, "--zas")) {
+        } else if (std.mem.eql(u8, a, "--oas")) {
             opts.mode = .assemble;
         } else if (std.mem.eql(u8, a, "-c")) {
             opts.mode = .obj_only;
@@ -326,7 +326,7 @@ fn replaceExt(arena: std.mem.Allocator, path: []const u8, new_ext: []const u8) ?
 
 fn runChild(gpa: std.mem.Allocator, io: std.Io, argv: []const []const u8, verbose: bool) !void {
     if (verbose) {
-        std.debug.print("zcc: run:", .{});
+        std.debug.print("OusiaC: run:", .{});
         for (argv) |a| std.debug.print(" {s}", .{a});
         std.debug.print("\n", .{});
     }

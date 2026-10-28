@@ -1,7 +1,7 @@
-/* zcc 自带 <limits.h> */
+/* OusiaC 自带 <limits.h> */
 
-#ifndef __ZCC_LIMITS_H
-#define __ZCC_LIMITS_H
+#ifndef __OUSIAC_LIMITS_H
+#define __OUSIAC_LIMITS_H
 
 #define CHAR_BIT 8
 #define SCHAR_MIN (-128)

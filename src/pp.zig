@@ -62,7 +62,7 @@ pub const Pp = struct {
     }
 
     fn predefine(self: *Pp) void {
-        self.definePlain("__ZCC__", "1");
+        self.definePlain("__OUSIAC__", "1");
         self.definePlain("__STDC__", "1");
         self.definePlain("__STDC_HOSTED__", "1");
         self.definePlain("__STDC_VERSION__", "201112L");
@@ -377,7 +377,7 @@ pub const Pp = struct {
     const IncludeContent = struct { path: []const u8, data: []const u8 };
 
     fn findInclude(self: *Pp, hash: *Token, path: []const u8, is_angle: bool) ?IncludeContent {
-        // 内建头文件(zcc 自带 stddef.h 等)
+        // 内建头文件(OusiaC 自带 stddef.h 等)
         if (!std.fs.path.isAbsolute(path)) {
             if (self.builtin_headers.get(path)) |c| {
                 return .{ .path = path, .data = c };

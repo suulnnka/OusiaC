@@ -1,4 +1,4 @@
-/* zcc 控制流测试:循环/switch/goto/标签 */
+/* OusiaC 控制流测试:循环/switch/goto/标签 */
 #include <stdio.h>
 
 int fib(int n) {

@@ -1,7 +1,7 @@
-/* zcc 自带 <stdbool.h>(bool 按 int 处理) */
+/* OusiaC 自带 <stdbool.h>(bool 按 int 处理) */
 
-#ifndef __ZCC_STDBOOL_H
-#define __ZCC_STDBOOL_H
+#ifndef __OUSIAC_STDBOOL_H
+#define __OUSIAC_STDBOOL_H
 
 #define bool int
 #define true 1

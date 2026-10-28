@@ -1,4 +1,4 @@
-/* zcc 堆分配/字符串函数/errno/文件 IO 测试 */
+/* OusiaC 堆分配/字符串函数/errno/文件 IO 测试 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +29,7 @@ int main(void) {
 
     /* string.h */
     char buf[64];
-    strcpy(buf, "zcc");
+    strcpy(buf, "OusiaC");
     strcat(buf, "-");
     strcat(buf, "works");
     printf("3: %s %d\n", buf, (int)strlen(buf));

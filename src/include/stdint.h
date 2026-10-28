@@ -1,7 +1,7 @@
-/* zcc 自带 <stdint.h> */
+/* OusiaC 自带 <stdint.h> */
 
-#ifndef __ZCC_STDINT_H
-#define __ZCC_STDINT_H
+#ifndef __OUSIAC_STDINT_H
+#define __OUSIAC_STDINT_H
 
 typedef signed char int8_t;
 typedef short int16_t;

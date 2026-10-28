@@ -1,6 +1,6 @@
-//! 汇编器:zcc 生成的 AT&T 汇编(.s)→ ELF64 可重定位目标文件(.o)
+//! 汇编器:OusiaC 生成的 AT&T 汇编(.s)→ ELF64 可重定位目标文件(.o)
 //!
-//! 只支持 zcc 代码生成器输出的指令子集,不追求通用:
+//! 只支持 OusiaC 代码生成器输出的指令子集,不追求通用:
 //!   - 寄存器:64/32/16/8 位(r8-r15 自动加 REX)
 //!   - 内存操作数:disp(%rbp) / (%rax|%rdi|%rsi) / sym(%rip)
 //!   - 跳转一律 rel32:同节局部标签直接 patch,其余发 PLT32 重定位
@@ -96,7 +96,7 @@ pub const Assembler = struct {
     err_line: u32 = 0,
 
     fn fail(self: *Assembler, line: u32, comptime fmt: []const u8, args: anytype) AsmError {
-        std.debug.print("{s}:{d}: zas error: ", .{ self.path, line });
+        std.debug.print("{s}:{d}: oas error: ", .{ self.path, line });
         std.debug.print(fmt, args);
         std.debug.print("\n", .{});
         return error.AsmError;

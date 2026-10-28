@@ -1,7 +1,7 @@
-# zcc —— 用 Zig 写的 C 编译器(目标:../os 的 ZOS)
+# OusiaC —— 用 Zig 写的 C 编译器(目标:../os 的 ZOS)
 
-`zcc` 是一个约 6400 行 Zig 的**自包含教学级 C 工具链**:编译器(词法→预处理→
-解析→x86-64 代码生成)+ **汇编器 `zas`** + **链接器 `zld`**,产出可以直接放进
+`OusiaC`(原名 `zcc`)是一个约 6400 行 Zig 的**自包含教学级 C 工具链**:编译器(词法→预处理→
+解析→x86-64 代码生成)+ **汇编器 `oas`** + **链接器 `old`**,产出可以直接放进
 `../os` 的 initrd、在 QEMU 里运行的用户程序(静态 ELF,基址 0x400000)。
 运行时链接 ZOS 自己的 `libzos.a`(crt0 + libc);`zig cc` 仅作为可选回退
 (`--use-zig-cc`)。
@@ -11,9 +11,9 @@ foo.c ──词法→ token ──预处理→ token ──解析→ AST ──�
                                                        │
         ┌──────────────────────────────────────────────┘
         ▼
-   zas(自研汇编器):foo.s → foo.o(ELF64 REL + 重定位)
+   oas(自研汇编器):foo.s → foo.o(ELF64 REL + 重定位)
         ▼
-   zld(自研链接器):foo.o + libzos.a(GNU ar,lazy 抽取)
+   old(自研链接器):foo.o + libzos.a(GNU ar,lazy 抽取)
         → foo(静态 ET_EXEC @0x400000,入口 _start,两个 PT_LOAD)
 ```
 
@@ -33,24 +33,24 @@ foo.c ──词法→ token ──预处理→ token ──解析→ AST ──�
 
 ```bash
 cd ../os && zig build        # 1) 先构建 ZOS(产出 libzos.a)
-cd ../ccompiler && zig build # 2) 构建 zcc
+cd ../ccompiler && zig build # 2) 构建 OusiaC
 
-./zig-out/bin/zcc examples/hello.c -o zhello   # 3) 编译一个 C 程序
+./zig-out/bin/OusiaC examples/hello.c -o ohello   # 3) 编译一个 C 程序
 ./scripts/e2e.sh                               # 4) 端到端:打 ISO + QEMU 全量验证
 ```
 
-e2e 会把 zcc 编译的程序装进 ZOS 的 `/bin`,启动 QEMU 逐个运行并检查输出,
-包括用 zcc 编译 ZOS 仓库里的真实程序 `wc.c`、`cdemo.c`(与 zig cc 版逐字节对比)。
+e2e 会把 OusiaC 编译的程序装进 ZOS 的 `/bin`,启动 QEMU 逐个运行并检查输出,
+包括用 OusiaC 编译 ZOS 仓库里的真实程序 `wc.c`、`cdemo.c`(与 zig cc 版逐字节对比)。
 
 ## 用法
 
 ```
-zcc [选项] input.c
+OusiaC [选项] input.c
   -o <file>       输出(默认 a.out)
   -S / -c / -E    只到汇编 / 目标文件 / 预处理
   -I <dir>        头文件搜索路径(自动追加 <os-root>/userland/include)
   -D <n>[=v]      预定义宏
-  --os-root DIR   ZOS 仓库位置(默认 ../os,或环境变量 ZCC_OS_ROOT)
+  --os-root DIR   ZOS 仓库位置(默认 ../os,或环境变量 OUSIAC_OS_ROOT)
   --keep-s        链接后保留 .s(看看生成的汇编,教学用)
   -v              打印底层命令
 ```
@@ -70,7 +70,7 @@ zcc [选项] input.c
   #if/#ifdef/#elif/#else/#endif(#if 走真正的常量求值器)、
   #undef/#error/#pragma(忽略)、__FILE__/__LINE__/__COUNTER__ 等。
 - **内建头文件**:stddef.h/stdarg.h/stdbool.h/stdint.h/limits.h 直接嵌在
-  zcc 二进制里(@embedFile),其余(<stdio.h> 等)用 ZOS 的 userland/include。
+  OusiaC 二进制里(@embedFile),其余(<stdio.h> 等)用 ZOS 的 userland/include。
 
 ### 已知边界(教学取舍)
 
@@ -87,9 +87,9 @@ zcc [选项] input.c
 | `src/parse.zig` | 声明/声明符(分组小舞蹈)/语句/表达式/初始化器/常量求值 | 2431 |
 | `src/gen.zig` | x86-64 SysV 代码生成(栈机式:结果恒在 %rax) | 564 |
 | `src/pp.zig` | 预处理器(宏、条件编译、include) | 754 |
-| `src/asm.zig` | **汇编器 zas**:AT&T 子集 → ELF64 REL(.o),含重定位 | ~700 |
-| `src/link.zig` | **链接器 zld**:.o + libzos.a → 静态 ET_EXEC | ~700 |
-| `src/main.zig` | 驱动:CLI → 流水线 → zas → zld(zig cc 仅回退) | ~330 |
+| `src/asm.zig` | **汇编器 oas**:AT&T 子集 → ELF64 REL(.o),含重定位 | ~700 |
+| `src/link.zig` | **链接器 old**:.o + libzos.a → 静态 ET_EXEC | ~700 |
+| `src/main.zig` | 驱动:CLI → 流水线 → oas → old(zig cc 仅回退) | ~330 |
 
 几个值得一提的实现点:
 
@@ -102,15 +102,15 @@ zcc [选项] input.c
 - **int 语义**:所有算术在 int(32 位)或 long(64 位)档进行,加载/存储按
   实际宽度符号或零扩展;全局初始化器支持"符号 ± 常量"的地址重定位。
 
-### 汇编器 zas(src/asm.zig)
+### 汇编器 oas(src/asm.zig)
 
-只编码 zcc 生成器输出的指令子集(约 60 种操作数模式),因此可以做到很小:
+只编码 OusiaC 生成器输出的指令子集(约 60 种操作数模式),因此可以做到很小:
 寄存器/内存操作数解析(REX 自动生成、r8-r15、disp8/disp32、`sym(%rip)`)、
 跳转一律 rel32 并在节末 patch 局部标签、其余符号引用发
 R_X86_64_{PC32,PLT32,64} 重定位;输出带 .symtab/.rela 的标准 ELF64 REL,
 可用 `objdump -d` 直接检查。
 
-### 链接器 zld(src/link.zig)
+### 链接器 old(src/link.zig)
 
 - **输入**:若干 .o + GNU ar 归档(解析 `/` 符号索引与 `//` 长名表,按需
   lazy 抽取成员,索引损坏则退化为全量索引)。
@@ -130,21 +130,21 @@ R_X86_64_{PC32,PLT32,64} 重定位;输出带 .symtab/.rela 的标准 ELF64 REL,
 结构体/联合/枚举/设计器、malloc/字符串/文件 IO,每行输出都有预期值;
 `./scripts/e2e.sh` 在 QEMU 里全量校验,并额外编译 ZOS 仓库的真实程序:
 
-- `wc.c`(Unix 字数统计)→ `wcz`:与 zig cc 版 `wc` 输出**逐字节一致**
-- `cdemo.c`(libc 全家桶自检)→ `zcdemo`:`cdemo: PASS`
+- `wc.c`(Unix 字数统计)→ `wco`:与 zig cc 版 `wc` 输出**逐字节一致**
+- `cdemo.c`(libc 全家桶自检)→ `ocdemo`:`cdemo: PASS`
 
 ```
 $ ./scripts/e2e.sh
 ...
-/ $ zarith
+/ $ oarith
 1: 12
 2: -10
 ...
-/ $ wcz /etc/motd
+/ $ wco /etc/motd
       4     29    202 /etc/motd
 / $ wc /etc/motd
       4     29    202 /etc/motd
-/ $ zcdemo
+/ $ ocdemo
 ...
 cdemo: PASS
 ```

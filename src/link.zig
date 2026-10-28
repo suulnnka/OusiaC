@@ -101,7 +101,7 @@ pub const Linker = struct {
 
     fn fail(self: *Linker, comptime fmt: []const u8, args: anytype) LinkError {
         _ = self;
-        std.debug.print("zld: error: ", .{});
+        std.debug.print("old: error: ", .{});
         std.debug.print(fmt, args);
         std.debug.print("\n", .{});
         return error.LinkError;

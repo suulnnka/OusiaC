@@ -1,4 +1,4 @@
-/* zcc 指针/数组/字符串/函数指针测试 */
+/* OusiaC 指针/数组/字符串/函数指针测试 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +27,7 @@ int main(void) {
     printf("3: %d\n", (int)(q - p));                   /* 8 */
 
     /* 字符串遍历 */
-    char s[] = "zcc";
+    char s[] = "OusiaC";
     int n = 0;
     for (char *c = s; *c; c++)
         n++;

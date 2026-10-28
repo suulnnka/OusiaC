@@ -1,4 +1,4 @@
-/* zcc 算术/位运算/类型测试 */
+/* OusiaC 算术/位运算/类型测试 */
 #include <stdio.h>
 
 int main(void) {

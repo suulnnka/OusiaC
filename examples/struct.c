@@ -1,4 +1,4 @@
-/* zcc 结构体/联合/枚举/初始化器测试 */
+/* OusiaC 结构体/联合/枚举/初始化器测试 */
 #include <stdio.h>
 #include <stddef.h>
 
@@ -21,7 +21,7 @@ int area(Rect *r) {
     return (r->br.x - r->tl.x) * (r->br.y - r->tl.y);
 }
 
-/* zcc 不支持结构体按值传参/返回,用出参指针代替 */
+/* OusiaC 不支持结构体按值传参/返回,用出参指针代替 */
 void mid(const Point *a, const Point *b, Point *out) {
     out->x = (a->x + b->x) / 2;
     out->y = (a->y + b->y) / 2;

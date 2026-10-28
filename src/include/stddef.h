@@ -1,7 +1,7 @@
-/* zcc 自带 <stddef.h> */
+/* OusiaC 自带 <stddef.h> */
 
-#ifndef __ZCC_STDDEF_H
-#define __ZCC_STDDEF_H
+#ifndef __OUSIAC_STDDEF_H
+#define __OUSIAC_STDDEF_H
 
 typedef unsigned long size_t;
 typedef long ptrdiff_t;
